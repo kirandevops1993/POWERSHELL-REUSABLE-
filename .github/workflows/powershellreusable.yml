@@ -1,0 +1,54 @@
+name: Template Run PowerShell Script e213ff0f-5d5c-4791-802d-52ea3e7be1f1
+
+on:
+  workflow_call:
+    inputs:
+      script-path:
+        required: false
+        type: string
+      script-arguments:
+        required: false
+        type: string
+        default: ""
+      inline-script:
+        required: false
+        type: string
+        default: ""
+    secrets: {}
+
+jobs:
+  run-powershell-script:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run PowerShell Script (file path or inline)
+        shell: pwsh
+        run: |
+          $scriptPath = "${{ inputs.script-path }}"
+          $arguments = "${{ inputs.script-arguments }}"
+          $inlineScript = "${{ inputs.inline-script }}"
+
+          if ($scriptPath -ne "") {
+            Write-Host "Running PowerShell script from file: $scriptPath"
+            if (!(Test-Path -Path $scriptPath)) {
+              throw "Script file does not exist: $scriptPath"
+            }
+            try {
+              & $scriptPath $arguments
+            } catch {
+              Write-Error "Script execution failed: $_"
+              exit 1
+            }
+          } elseif ($inlineScript -ne "") {
+            Write-Host "Running Inline PowerShell Script"
+            try {
+              Invoke-Expression $inlineScript
+            } catch {
+              Write-Error "Inline script execution failed: $_"
+              exit 1
+            }
+          } else {
+            throw "No script path or inline script provided."
+          }
