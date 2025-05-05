@@ -3,52 +3,66 @@ name: Template Run PowerShell Script e213ff0f-5d5c-4791-802d-52ea3e7be1f1
 on:
   workflow_call:
     inputs:
-      script-path:
+      scriptType:
         required: true
         type: string
-      script-arguments:
+        description: "'inlineScript' or 'filePath'"
+      scriptName:
         required: false
         type: string
-        default: ""
-      inline-script:
+        description: "Path to the script file (required if scriptType is 'filePath')"
+      arguments:
         required: false
         type: string
-        default: ""
-    secrets: {}
+        description: "Arguments to pass to the script"
+      inlineScript:
+        required: false
+        type: string
+        description: "Inline PowerShell script (required if scriptType is 'inlineScript')"
+      workingFolder:
+        required: false
+        type: string
+        description: "Working folder"
+      failOnStandardError:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail on standard error"
 
 jobs:
-  run-powershell-script:
+  powershell-task:
     runs-on: windows-latest
+
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Run PowerShell Script (file path or inline)
+      - name: Run PowerShell Script
         shell: pwsh
         run: |
-          $scriptPath = "${{ inputs.script-path }}"
-          $arguments = "${{ inputs.script-arguments }}"
-          $inlineScript = "${{ inputs.inline-script }}"
+          $failOnError = if ('${{ inputs.failOnStandardError }}' -eq 'true') { 'Stop' } else { 'Continue' }
 
-          if ($scriptPath -ne "") {
-            Write-Host "Running PowerShell script from file: $scriptPath"
-            if (!(Test-Path -Path $scriptPath)) {
-              throw "Script file does not exist: $scriptPath"
-            }
-            try {
-              & $scriptPath $arguments
-            } catch {
-              Write-Error "Script execution failed: $_"
-              exit 1
-            }
-          } elseif ($inlineScript -ne "") {
-            Write-Host "Running Inline PowerShell Script"
-            try {
-              Invoke-Expression $inlineScript
-            } catch {
-              Write-Error "Inline script execution failed: $_"
+          # Resolve working folder and verify its existence
+          $workingFolder = if ('${{ inputs.workingFolder }}' -ne '') { '${{ inputs.workingFolder }}' } else { '.' }
+          if (!(Test-Path -Path $workingFolder)) {
+            Write-Error "Working folder does not exist: $workingFolder"
+            exit 1
+          }
+          Set-Location -Path $workingFolder
+
+          if ('${{ inputs.scriptType }}' -eq 'inlineScript') {
+            Write-Host "Running inline script..."
+            Invoke-Expression "${{ inputs.inlineScript }}"
+          } elseif ('${{ inputs.scriptType }}' -eq 'filePath') {
+            Write-Host "Running script from file path..."
+            $scriptPath = "${{ inputs.scriptName }}"
+            if (Test-Path $scriptPath) {
+              & $scriptPath ${{ inputs.arguments }}
+            } else {
+              Write-Error "Script file not found: $scriptPath"
               exit 1
             }
           } else {
-            throw "No script path or inline script provided."
+            Write-Error "Invalid scriptType provided: '${{ inputs.scriptType }}'"
+            exit 1
           }
